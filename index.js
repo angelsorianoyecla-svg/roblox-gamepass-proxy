@@ -2,83 +2,48 @@ import express from "express";
 import fetch from "node-fetch";
 
 const app = express();
-
-// Ruta principal de prueba
-app.get("/", (req, res) => {
-  res.send("✅ Proxy Roblox funcionando en Render!");
-});
-
-/**
- * Proxy para obtener Gamepasses de un usuario
- * Endpoint: /gamepasses?userId=XXXX
- */
-app.get("/gamepasses", async (req, res) => {
-  const { userId } = req.query;
-
-  if (!userId) {
-    return res.status(400).json({ error: "Falta userId" });
-  }
-
-  try {
-    // Llamamos a la API oficial de Roblox
-    const response = await fetch(
-      `https://games.roblox.com/v2/users/${userId}/games?accessFilter=Public&limit=10`
-    );
-
-    if (!response.ok) {
-      throw new Error(`Roblox API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    // Devolver datos al cliente (Roblox Studio o web)
-    res.json({
-      result: "success",
-      response: data,
-    });
-  } catch (err) {
-    console.error("❌ Error en proxy:", err.message);
-    res.status(500).json({
-      result: "error",
-      error: err.message,
-    });
-  }
-});
-
-/**
- * Proxy genérico (para cualquier URL de Roblox)
- * Endpoint: /proxy?url=https://catalog.roblox.com/v1/search/items?keyword=hat
- */
-app.get("/proxy", async (req, res) => {
-  const { url } = req.query;
-
-  if (!url) {
-    return res.status(400).json({ error: "Falta parámetro url" });
-  }
-
-  try {
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      throw new Error(`Roblox API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    res.json({
-      result: "success",
-      response: data,
-    });
-  } catch (err) {
-    console.error("❌ Error en proxy genérico:", err.message);
-    res.status(500).json({
-      result: "error",
-      error: err.message,
-    });
-  }
-});
-
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+
+app.get("/", (req, res) => {
+  res.json({ status: "ok", msg: "Proxy funcionando" });
 });
 
+app.get("/gamepasses", async (req, res) => {
+  const userId = req.query.userId;
+  if (!userId) return res.json({ result: "error", error: "Falta userId" });
+
+  try {
+    // 1) Obtener universos/juegos del usuario
+    const gamesRes = await fetch(`https://games.roblox.com/v2/users/${userId}/games?limit=50`);
+    const games = await gamesRes.json();
+
+    if (!games.data || games.data.length === 0) {
+      return res.json({ result: "success", data: [] });
+    }
+
+    let passes = [];
+
+    // 2) Para cada juego, buscar gamepasses
+    for (const g of games.data) {
+      const universeId = g.id; // este "id" es universeId
+      const passRes = await fetch(`https://apis.roblox.com/game-passes/v1/game-passes/universe/${universeId}?limit=100`);
+      const passJson = await passRes.json();
+
+      if (passJson.data) {
+        passes = passes.concat(passJson.data.map(p => ({
+          id: p.id,
+          name: p.name,
+          price: p.price ?? 0,
+          universeId: universeId
+        })));
+      }
+    }
+
+    res.json({ result: "success", data: passes });
+  } catch (err) {
+    console.error(err);
+    res.json({ result: "error", error: err.message });
+  }
+});
+
+app.listen(PORT, () => console.log(`🚀 Servidor corriendo en puerto ${PORT}`));
