@@ -1,7 +1,7 @@
 {
   "name": "roblox-gamepass-backend",
   "version": "1.0.0",
-  "description": "Backend para obtener gamepasses de Roblox vía scraping",
+  "description": "Backend para obtener gamepasses de Roblox vía Puppeteer",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -9,6 +9,6 @@
   },
   "dependencies": {
     "express": "^4.18.2",
-    "node-fetch": "^3.3.2"
+    "puppeteer": "^21.3.8"
   }
 }
