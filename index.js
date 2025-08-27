@@ -5,7 +5,7 @@ import fetch from "node-fetch";
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Ruta raíz para comprobar que funciona
+// Ruta raíz de prueba
 app.get("/", (req, res) => {
   res.send("✅ Proxy Roblox Gamepass activo en Render");
 });
@@ -16,9 +16,9 @@ app.get("/gamepasses", async (req, res) => {
   if (!userId) return res.status(400).json({ error: "Falta userId en la query (?userId=...)" });
 
   try {
-    // 1️⃣ Obtener todos los universes (juegos) del usuario
-    const gamesRes = await fetch(`https://games.roblox.com/v2/users/${userId}/games?accessFilter=Public&limit=50`);
-    const gamesData = await gamesRes.json();
+    // 1️⃣ Obtener las places públicas del usuario
+    const gamesResp = await fetch(`https://games.roblox.com/v2/users/${userId}/games?accessFilter=Public&limit=50`);
+    const gamesData = await gamesResp.json();
 
     if (!gamesData.data || gamesData.data.length === 0) {
       return res.json({ result: "success", data: [] });
@@ -26,26 +26,32 @@ app.get("/gamepasses", async (req, res) => {
 
     let allGamepasses = [];
 
-    // 2️⃣ Iterar cada universo para sacar gamepasses
-    for (const game of gamesData.data) {
-      const universeId = game.id;
-
+    // 2️⃣ Iterar cada place
+    for (const place of gamesData.data) {
       try {
-        const passesRes = await fetch(
-          `https://apis.roblox.com/game-passes/v1/game-passes?universeId=${universeId}&limit=100`
-        );
-        const passesData = await passesRes.json();
+        // Obtener universeId
+        const universeResp = await fetch(`https://apis.roblox.com/universes/v1/places/${place.rootPlace.id}/universe`);
+        const universeData = await universeResp.json();
+        const universeId = universeData.universeId;
+
+        if (!universeId) continue;
+
+        // Obtener gamepasses de ese universe
+        const passesResp = await fetch(`https://apis.roblox.com/game-passes/v1/game-passes?universeId=${universeId}&limit=100`);
+        const passesData = await passesResp.json();
 
         if (passesData.data && passesData.data.length > 0) {
-          allGamepasses.push(...passesData.data.map(p => ({
-            id: p.id,
-            name: p.name,
-            price: p.price ?? 0,
-            universeId: universeId
-          })));
+          allGamepasses.push(
+            ...passesData.data.map(p => ({
+              id: p.id,
+              name: p.name,
+              price: p.price ?? 0,
+              universeId: universeId
+            }))
+          );
         }
       } catch (err) {
-        console.warn(`[GamepassFetch] Error fetch universe ${universeId}:`, err.message);
+        console.warn(`[GamepassFetch] Error en place ${place.rootPlace.id}: ${err.message}`);
       }
     }
 
